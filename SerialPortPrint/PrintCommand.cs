@@ -154,5 +154,24 @@ namespace SerialPortPrint
 
         }
         #endregion
+
+        #region 钱箱控制
+        /// <summary>
+        /// 打开钱箱
+        /// </summary>
+        /// <returns></returns>
+        public static byte[] OpenCashbox()
+        {
+            byte[] cmdData = new byte[5];
+
+
+            cmdData[0] = 0x1B;
+            cmdData[1] = 0x70;
+            cmdData[2] = 0x00;
+            cmdData[3] = 0x05;
+            cmdData[4] = 0x05;
+            return cmdData;
+        }
+        #endregion
     }
 }

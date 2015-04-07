@@ -3,6 +3,7 @@ using Android.Bluetooth;
 using Android.Content;
 using Android.Graphics;
 using Android.OS;
+using Android.Util;
 using Android.Widget;
 using PrintBase;
 using SerialPortPrint;
@@ -17,6 +18,8 @@ namespace BluetoothPrint.droid
     /// </summary>
     public class BluetoothHelper : IDisposable
     {
+        private const string TAG = "BluetoothHelper";
+        private string address;
         private bool isopen = false;
         // Track whether Dispose has been called.
         private bool disposed = false;
@@ -27,6 +30,7 @@ namespace BluetoothPrint.droid
         public const int MESSAGE_WRITE = 3;
         public const int MESSAGE_DEVICE_NAME = 4;
         public const int MESSAGE_TOAST = 5;
+        public const int MESSAGE_CONNCETFAILED = 6;
 
 
         /// <summary>
@@ -39,8 +43,8 @@ namespace BluetoothPrint.droid
         public const int ERROR_NOTCONNCETED = 3;
 
         // Key names received from the BluetoothService Handler
-        public const string DEVICE_NAME=""; 
-        public const string DEVICE_ADDRESS=""; 
+        public const string DEVICE_NAME = "";
+        public const string DEVICE_ADDRESS = "";
         public const string TOAST = "toast";
 
         // Intent request codes
@@ -50,7 +54,7 @@ namespace BluetoothPrint.droid
 
         // Name of the connected device
         internal string connectedDeviceName = null;
-        internal string connectedDeviceAddress = null; 
+        internal string connectedDeviceAddress = null;
 
 
         private BluetoothAdapter bluetoothAdapter = null;
@@ -67,20 +71,40 @@ namespace BluetoothPrint.droid
                 chatService.Stop();
             }
         }
-
-        public int Init(Action<string,string> ConnectedAction, Action<string> ConnectingAction, Action<string> ConnFailedAction)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="ConnectedAction">连接成功</param>
+        /// <param name="ConnectingAction">连接中</param>
+        /// <param name="ConnFailedAction">断开链接（用户UI提示）</param>
+        /// <returns></returns>
+        public int Init(Action<string, string> ConnectedAction, Action<string> ConnectingAction, Action<string> ConnFailedAction)
         {
+            //断开重连
+            Action<string> connLost = (mess) =>
+            {
+                if (GetState() == 1)
+                {
+                    if (!string.IsNullOrEmpty(address))
+                    {
+                        Log.Debug(TAG, mess);
+                        Stop();
+                        System.Threading.Thread.Sleep(2000);
+                        Connect(address);
+                    }
+                }
+            };
             int err = 0;
             Stop();
             bluetoothAdapter = BluetoothAdapter.DefaultAdapter;
             if (bluetoothAdapter == null)
             {
-                err =(int)PrintError.NotSupportBluetooth;
+                err = (int)PrintError.NotSupportBluetooth;
                 return err;
             }
             else
             {
-                chatService = new BluetoothService(new MyHandler(this, ConnectedAction, ConnectingAction, ConnFailedAction));
+                chatService = new BluetoothService(new MyHandler(this, ConnectedAction, ConnectingAction, ConnFailedAction, connLost));
                 isopen = true;
                 err = 1;
                 return err;
@@ -92,7 +116,7 @@ namespace BluetoothPrint.droid
         /// <returns></returns>
         public int IsOpen()
         {
-            
+
             int err = 0;
             try
             {
@@ -114,7 +138,7 @@ namespace BluetoothPrint.droid
         public int IsConnected()
         {
             int err = 0;
-            if (this.chatService.GetState() == BluetoothService.STATE_CONNECTED)
+            if (this.chatService != null && this.chatService.GetState() == BluetoothService.STATE_CONNECTED)
             {
                 err = 1;
                 return err;
@@ -157,24 +181,77 @@ namespace BluetoothPrint.droid
                 err = (int)PrintError.OpenFailure;
                 return err;
             }
+            this.address = address;
             BluetoothDevice device = bluetoothAdapter.GetRemoteDevice(address);
             chatService.Connect(device);
-            isopen = true;
             err = 1;
             return err;
         }
-       /// <summary>
-       /// 打印文本内容
-       /// </summary>
-       /// <param name="message">打印的内容</param>
+
+        public byte[] Init()
+        {
+            return PrintCommand.Inite();
+        }
+        /// <summary>
+        /// 获取打印机状态
+        /// </summary>
+        /// <returns>3:STATE_CONNECTED,2:STATE_CONNECTING,1:STATE_LISTEN,0：STATE_NONE</returns>
+        public int GetState()
+        {
+            return (int)this.chatService.GetState();
+        }
+        public int SendCommand(byte[] cmd)
+        {
+            int err = 0;
+            try
+            {
+                if (!isopen)
+                {
+                    err = (int)PrintError.OpenFailure;
+                    return err;
+                }
+                if (this.chatService.GetState() != BluetoothService.STATE_CONNECTED)
+                {
+                    err = (int)PrintError.ConnectedFailure;
+                    return err;
+                }
+
+                if (cmd.Length <= 0)
+                {
+                    err = (int)PrintError.SendNull;
+                    return err;
+                }
+
+
+                if (chatService.Write(cmd))
+                {
+                    err = 1;
+                }
+                else
+                {
+                    err = (int)PrintError.SendFailure;
+                }
+
+                return err;
+            }
+            catch
+            {
+                err = (int)PrintError.SendFailure;
+                return err;
+            }
+        }
+        /// <summary>
+        /// 打印文本内容
+        /// </summary>
+        /// <param name="message">打印的内容</param>
         /// <param name="err">2:没有开启蓝牙，3：没有连接打印机，4：butmap为null,5:程序出现异常</param>
-       /// <returns></returns>
+        /// <returns></returns>
         public int SendMessage(Java.Lang.String message)
         {
-           int err =0;
+            int err = 0;
             if (!isopen)
             {
-                err =(int)PrintError.OpenFailure;
+                err = (int)PrintError.OpenFailure;
                 return err;
             }
             if (this.chatService.GetState() != BluetoothService.STATE_CONNECTED)
@@ -190,7 +267,7 @@ namespace BluetoothPrint.droid
             }
             try
             {
-                byte[] send = message.GetBytes();
+                byte[] send = message.GetBytes("GB2312");
                 chatService.Write(send);
                 err = 1;
                 return err;
@@ -202,15 +279,15 @@ namespace BluetoothPrint.droid
             }
 
             // Get the message bytes and tell the BluetoothService to write
-            
+
         }
-       /// <summary>
-       /// 打印图片
-       /// </summary>
-       /// <param name="bitmap">图片</param>
-       /// <param name="err">2:没有开启蓝牙，3：没有连接打印机，4：butmap为null,5:程序出现异常</param>
-       /// <returns></returns>
-        public int SendImg(Bitmap bitmap,int dpiWidth,int pt)
+        /// <summary>
+        /// 打印图片
+        /// </summary>
+        /// <param name="bitmap">图片</param>
+        /// <param name="err">2:没有开启蓝牙，3：没有连接打印机，4：butmap为null,5:程序出现异常</param>
+        /// <returns></returns>
+        public int SendImg(Bitmap bitmap, int dpiWidth, int pt)
         {
             int err = 0;
             if (!isopen)
@@ -220,19 +297,22 @@ namespace BluetoothPrint.droid
             }
             if (this.chatService.GetState() != BluetoothService.STATE_CONNECTED)
             {
-                err = (int)PrintError.ConnectedFailure ;
+                err = (int)PrintError.ConnectedFailure;
                 return err;
             }
 
             if (bitmap == null)
             {
-                err = (int)PrintError.SendNull ; 
+                err = (int)PrintError.SendNull;
                 return err;
             }
 
             try
             {
-                byte[] data = Pos.POS_PrintPicture(bitmap, dpiWidth, 0, (PrinterType)pt);
+                var newbit = ResizeBitmap(bitmap, dpiWidth, bitmap.Height);
+
+
+                byte[] data = Pos.POS_PrintPicture(newbit, dpiWidth, 0, (PrinterType)pt);
                 byte[] cmdData = new byte[data.Length + 6];
                 cmdData[0] = 0x1B;
                 cmdData[1] = 0x2A;
@@ -249,8 +329,9 @@ namespace BluetoothPrint.droid
                 err = 1;
                 return err;
             }
-            catch {
-                err = (int)PrintError.SendFailure ;
+            catch
+            {
+                err = (int)PrintError.SendFailure;
                 return err;
             }
         }
@@ -295,6 +376,23 @@ namespace BluetoothPrint.droid
         }
 
 
+        public Bitmap ResizeBitmap(Bitmap bitmap, int newWidth, int newHeight)
+        {
+            Bitmap newbit = Bitmap.CreateBitmap(newWidth, newHeight, Bitmap.Config.Rgb565);
+            Android.Graphics.Canvas canvas = new Canvas(newbit);
+            canvas.DrawColor(Color.White);
+            Paint pt = new Paint();
+            pt.Color = Color.White;
+
+            //Rect bgR = new Rect(0, 0, width, height);
+            Matrix matrix1 = new Matrix();
+            matrix1.PostScale(1, 1);
+            //canvas.DrawRect(bgR, pt);
+            Android.Graphics.Rect rect = new Rect(0, 0, bitmap.Width, bitmap.Height);
+            canvas.DrawBitmap(bitmap, rect, rect, pt);
+            return newbit;
+        }
+
 
         // The Handler that gets information back from the BluetoothService
         private class MyHandler : Handler
@@ -303,13 +401,23 @@ namespace BluetoothPrint.droid
             Action<string, string> ConnectedAction;
             Action<string> ConnectingAction;
             Action<string> ConnFailedAction;
+            Action<string> ConnLost;
 
-            public MyHandler(BluetoothHelper chat, Action<string,string> ConnectedAction, Action<string> ConnectingAction, Action<string> ConnFailedAction)
+            /// <summary>
+            /// 
+            /// </summary>
+            /// <param name="chat"></param>
+            /// <param name="ConnectedAction">连接成功</param>
+            /// <param name="ConnectingAction">连接中</param>
+            /// <param name="ConnFailedAction">断开链接（用户UI提示）</param>
+            /// <param name="ConnLost">断开连接（触发断线重连）</param>
+            public MyHandler(BluetoothHelper chat, Action<string, string> ConnectedAction, Action<string> ConnectingAction, Action<string> ConnFailedAction, Action<string> ConnLost)
             {
                 bluetoothChat = chat;
                 this.ConnectedAction = ConnectedAction;
                 this.ConnectingAction = ConnectingAction;
                 this.ConnFailedAction = ConnFailedAction;
+                this.ConnLost = ConnLost;
             }
             public override void HandleMessage(Message msg)
             {
@@ -319,7 +427,7 @@ namespace BluetoothPrint.droid
                         switch (msg.Arg1)
                         {
                             case BluetoothService.STATE_CONNECTED:
-                                if (ConnectedAction!=null)
+                                if (ConnectedAction != null)
                                 {
                                     string deviceName = bluetoothChat.connectedDeviceName;
                                     string address = bluetoothChat.connectedDeviceAddress;
@@ -354,7 +462,6 @@ namespace BluetoothPrint.droid
                         byte[] readBuf = (byte[])msg.Obj;
                         // construct a string from the valid bytes in the buffer
                         var readMessage = new Java.Lang.String(readBuf, 0, msg.Arg1);
-
                         //bluetoothChat.conversationArrayAdapter.Add(bluetoothChat.connectedDeviceName + ":  " + readMessage);
                         break;
                     case BluetoothHelper.MESSAGE_DEVICE_NAME:
@@ -365,6 +472,26 @@ namespace BluetoothPrint.droid
                         break;
                     case BluetoothHelper.MESSAGE_TOAST:
                         //Toast.MakeText(Application.Context, msg.Data.GetString(TOAST), ToastLength.Short).Show();
+                        //蓝牙断开
+                        //连接失败
+                        if (ConnLost != null)
+                        {
+                            ConnLost("连接断开");
+                        }
+                        if (ConnFailedAction != null)
+                        {
+                            ConnFailedAction("连接断开");
+                        }
+                        break;
+                    case BluetoothHelper.MESSAGE_CONNCETFAILED:
+                        if (ConnLost != null)
+                        {
+                            ConnLost("连接断开");
+                        }
+                        if (ConnFailedAction != null)
+                        {
+                            ConnFailedAction("连接断开");
+                        }
                         break;
                 }
             }

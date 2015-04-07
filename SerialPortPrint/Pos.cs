@@ -85,7 +85,8 @@ namespace PrintBase
 
 
 #if ANDROID
-            System.Drawing.Rectangle rect = new System.Drawing.Rectangle(0, 0, newWidth, newHeight);
+            
+    
 
             Matrix matrix = new Matrix();
             matrix.PostScale(scaleWidth, scaleHeight);// 产生缩放后的Bitmap对象

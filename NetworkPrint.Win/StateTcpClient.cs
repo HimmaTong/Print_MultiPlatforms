@@ -84,7 +84,7 @@ namespace NetworkPrint.Win
         public int GetState()
         {
             int error = 0;
-            if (tcpClient.Client.Connected)
+            if (tcpClient.Client!=null && tcpClient.Client.Connected)
             {
                 byte[] data = PrintCommand.GetState();
 

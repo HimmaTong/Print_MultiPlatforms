@@ -16,7 +16,7 @@ namespace Test.NetworkPrint.Win
         public Form1()
         {
             InitializeComponent();
-            print = new PrintHelper("192.168.1.114",null);
+            print = new PrintHelper("192.168.1.113",null);
             print.Connect();
             print.StartStateReturn();
             print.PrinterInite();
@@ -32,8 +32,11 @@ namespace Test.NetworkPrint.Win
         {
             int error;
             //print.PrintString("hello world111111111111111111111111111111111111!");
-            Bitmap bitmap = (Bitmap)Bitmap.FromFile("tesddt.jpg");
-            print.PrintImg(bitmap, out error,0);
+            //Bitmap bitmap = (Bitmap)Bitmap.FromFile("tesddt.jpg");
+            //print.PrintImg(bitmap, out error,0);
+
+            //开启钱箱
+            //print.OpenCashbox();
         }
     }
 }

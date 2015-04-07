@@ -278,5 +278,27 @@ namespace NetworkPrint.Win
                 return false;
             }
         }
+
+        /// <summary>
+        /// 开启钱箱
+        /// </summary>
+        /// <returns></returns>
+        public bool OpenCashbox()
+        {
+            byte[] cmdData = PrintCommand.OpenCashbox();
+            try
+            {
+                var res = tcpClient.Client.Send(cmdData);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                if (SocketErrorAction != null)
+                {
+                    SocketErrorAction(ex);
+                }
+                return false;
+            }
+        }
     }
 }

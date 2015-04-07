@@ -311,8 +311,6 @@ namespace NetworkPrint.Win
             }
         }
 
-
-
         /// <summary>
         /// 打印图片
         /// </summary>
@@ -413,6 +411,7 @@ namespace NetworkPrint.Win
                 return false;
             }
         }
+        
 
     }
 }
