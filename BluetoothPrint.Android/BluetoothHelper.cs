@@ -374,8 +374,7 @@ namespace BluetoothPrint.droid
                 return err;
             }
         }
-
-
+      
         public Bitmap ResizeBitmap(Bitmap bitmap, int newWidth, int newHeight)
         {
             Bitmap newbit = Bitmap.CreateBitmap(newWidth, newHeight, Bitmap.Config.Rgb565);

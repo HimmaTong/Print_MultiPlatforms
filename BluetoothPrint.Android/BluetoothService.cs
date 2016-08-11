@@ -165,7 +165,7 @@ namespace BluetoothPrint.droid
             connectThread = new ConnectThread(device, this);
             connectThread.Start();
 
-            SetState(STATE_CONNECTING);
+            //SetState(STATE_CONNECTING);
         }
 
         /// <summary>
